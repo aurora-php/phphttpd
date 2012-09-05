@@ -133,7 +133,7 @@ if (php_sapi_name() == 'cli') {
             $bind_port,
             $pid
         );
-        die(255);
+        die(0);
     } else {
         printf(
             "Unable to start %s on '%s:%s'\n",
