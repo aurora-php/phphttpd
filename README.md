@@ -34,6 +34,10 @@ The following parameters are supported:
                      (defaults to 8888)
     -r, --router     A php script used as request router.
                      (defaults to the current executed script)
+    --doc-root       Alternative document-root directory
+    --env            Additional environment variable(s) to set. This option
+                     can be specified multiple times and the option value has
+                     to be in the form 'name=value'.
     --pid-file       A file to write the pid to. the file will be overwritten.
                      (default does not write a PID file)
 
@@ -62,7 +66,7 @@ License
 
 phphttpd
 
-Copyright (c) 2012, Harald Lapp <harald.lapp@gmail.com>.
+Copyright (c) 2012-2013, Harald Lapp <harald.lapp@gmail.com>.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without 
