@@ -45,6 +45,8 @@ if (php_sapi_name() == 'cli') {
     $bind_port = '8888';
     $router    = null;
     $pid_file  = null;
+    $docroot   = null;
+    $env       = array();
 
     // php version check
     if (version_compare(PHP_VERSION, $version) < 0) {
@@ -58,7 +60,7 @@ if (php_sapi_name() == 'cli') {
     // process command-line arguments
     $options = getopt(
         'b:p:r:h',
-        array('bind-ip:', 'port:', 'router:', 'pid-file:', 'help')
+        array('bind-ip:', 'port:', 'router:', 'pid-file:', 'help', 'env:', 'doc-root:')
     );
 
     if (isset($options['h']) || isset($options['help'])) {
@@ -69,6 +71,10 @@ if (php_sapi_name() == 'cli') {
         printf("                   (defaults to %d)\n", $bind_port);
         print "  -r, --router     A php script used as request router.\n";
         print "                   (defaults to the current executed script)\n";
+        print "  --doc-root       Alternative document-root directory\n";
+        print "  --env            Additional environment variable(s) to set. This option\n";
+        print "                   can be specified multiple times and the option value has\n";
+        print "                   to be in the form 'name=value'.\n";
         print "  --pid-file       A file to write the pid to. the file will be overwritten.\n";
         print "                   (default does not write a PID file)\n";
 
@@ -103,6 +109,18 @@ if (php_sapi_name() == 'cli') {
         die(255);
     }
 
+    if (isset($options['doc-root'])) {
+        $docroot = $options['doc-root'];
+        
+        if (!is_dir($docroot)) {
+            printf(
+                "Document-root is no directory '%s'.\n",
+                $docroot
+            );
+            die(255);
+        }
+    }
+
     if (isset($options['pid-file'])) {
         $pid_file = $options['pid-file'];
     }
@@ -115,10 +133,29 @@ if (php_sapi_name() == 'cli') {
         die(255);
     }
 
+    if (isset($options['env'])) {
+        $tmp = (is_array($options['env'])
+                ? $options['env']
+                : (array)$options['env']);
+
+        foreach ($tmp as $_tmp) {
+            if (!preg_match('/^([a-z_]+[a-z0-9_]*)=(.*)$/i', $_tmp, $match)) {
+                printf(
+                    "WARNING: skipping invalid environment variable '%s'.\n",
+                    $_tmp
+                );
+            } else {
+                $env[] = $match[1] . '=' . escapeshellarg($match[2]);
+            }
+        }
+    }
+
     // start php's builtin webserver
     $pid = exec(sprintf(
-        '((%s -d output_buffering=on -S %s:%s %s 1>/dev/null 2>&1 & echo $!) &)',
+        '((%s %s -d output_buffering=on %s -S %s:%s %s 1>/dev/null 2>&1 & echo $!) &)',
+        implode(' ', $env),
         PHP_BINARY,
+        (!is_null($docroot) ? ' -t ' . $docroot : ''),
         $bind_ip,
         $bind_port,
         $router
