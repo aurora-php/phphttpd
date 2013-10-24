@@ -47,6 +47,7 @@ if (php_sapi_name() == 'cli') {
     $pid_file  = null;
     $docroot   = null;
     $env       = array();
+    $define    = array();
 
     // php version check
     if (version_compare(PHP_VERSION, $version) < 0) {
@@ -60,7 +61,7 @@ if (php_sapi_name() == 'cli') {
     // process command-line arguments
     $options = getopt(
         'b:p:r:h',
-        array('bind-ip:', 'port:', 'router:', 'pid-file:', 'help', 'env:', 'doc-root:')
+        array('bind-ip:', 'port:', 'router:', 'pid-file:', 'help', 'env:', 'define:', 'doc-root:')
     );
 
     if (isset($options['h']) || isset($options['help'])) {
@@ -75,6 +76,8 @@ if (php_sapi_name() == 'cli') {
         print "  --env            Additional environment variable(s) to set. This option\n";
         print "                   can be specified multiple times and the option value has\n";
         print "                   to be in the form 'name=value'.\n";
+        print "  --define         Additional INI entries to set for PHP. Note however, that\n"
+        print "                   'output_buffering' cannot be modified using this option.\n";
         print "  --pid-file       A file to write the pid to. the file will be overwritten.\n";
         print "                   (default does not write a PID file)\n";
 
@@ -137,6 +140,23 @@ if (php_sapi_name() == 'cli') {
         $tmp = (is_array($options['env'])
                 ? $options['env']
                 : (array)$options['env']);
+
+        foreach ($tmp as $_tmp) {
+            if (!preg_match('/^([a-z_]+[a-z0-9_]*)=(.*)$/i', $_tmp, $match)) {
+                printf(
+                    "WARNING: skipping invalid environment variable '%s'.\n",
+                    $_tmp
+                );
+            } else {
+                $env[] = $match[1] . '=' . escapeshellarg($match[2]);
+            }
+        }
+    }
+    
+    if (isset($options['define'])) {
+        $tmp = (is_array($options['define'])
+                ? $options['env']
+                : (array)$options['define']);
 
         foreach ($tmp as $_tmp) {
             if (!preg_match('/^([a-z_]+[a-z0-9_]*)=(.*)$/i', $_tmp, $match)) {
