@@ -43,6 +43,8 @@ if (php_sapi_name() == 'cli') {
     $version   = '5.4.0';
     $bind_ip   = '127.0.0.1';
     $bind_port = '8888';
+    $ssl_pem   = __DIR__ . '/stunnel/stunnel.pem';
+    $bind_ssl  = null;
     $router    = null;
     $pid_file  = null;
     $docroot   = null;
@@ -61,7 +63,7 @@ if (php_sapi_name() == 'cli') {
     // process command-line arguments
     $options = getopt(
         'b:p:r:h',
-        array('bind-ip:', 'port:', 'router:', 'pid-file:', 'help', 'env:', 'define:', 'doc-root:')
+        array('bind-ip:', 'port:', 'router:', 'pid-file:', 'help', 'env:', 'define:', 'doc-root:', 'ssl:')
     );
 
     if (isset($options['h']) || isset($options['help'])) {
@@ -72,11 +74,13 @@ if (php_sapi_name() == 'cli') {
         printf("                   (defaults to %d)\n", $bind_port);
         print "  -r, --router     A php script used as request router.\n";
         print "                   (defaults to the current executed script)\n";
+        print "  --ssl            Enable SSL with the specified port. This requires 'stunnel'\n";
+        print "                   to work.\n";
         print "  --doc-root       Alternative document-root directory\n";
         print "  --env            Additional environment variable(s) to set. This option\n";
         print "                   can be specified multiple times and the option value has\n";
         print "                   to be in the form 'name=value'.\n";
-        print "  --define         Additional INI entries to set for PHP. Note however, that\n"
+        print "  --define         Additional INI entries to set for PHP. Note however, that\n";
         print "                   'output_buffering' cannot be modified using this option.\n";
         print "  --pid-file       A file to write the pid to. the file will be overwritten.\n";
         print "                   (default does not write a PID file)\n";
@@ -94,6 +98,15 @@ if (php_sapi_name() == 'cli') {
     } elseif (isset($options['port'])) {
         $bind_port = $options['port'];
     }
+    if (isset($options['ssl'])) {
+        if (`which stunnel` == '') {
+            print "SSL requires 'stunnel' to be installed!\n";
+            die(255);
+        }
+        
+        $bind_ssl = $options['ssl'];
+    }
+    
     if (isset($options['r'])) {
         $router = $options['r'];
     } elseif (isset($options['router'])) {
@@ -167,6 +180,50 @@ if (php_sapi_name() == 'cli') {
             } else {
                 $env[] = $match[1] . '=' . escapeshellarg($match[2]);
             }
+        }
+    }
+
+    // start stunnel
+    if (!is_null($bind_ssl)) {
+        $pid_ssl = exec(sprintf("((echo \"
+                cert = %s
+                key  = %s
+ 
+                sslVersion = SSLv3
+ 
+                socket = l:TCP_NODELAY=1
+                socket = r:TCP_NODELAY=1
+ 
+                foreground = yes
+                pid =
+ 
+                [https]
+                accept  = %s:%d
+                connect = %s:%d
+            \" | stunnel -fd 0 1>/dev/null 2>&1 & echo $!) &)", 
+            $ssl_pem, 
+            $ssl_pem, 
+            $bind_ip, $bind_ssl,
+            $bind_ip, $bind_port
+        ));
+        sleep(1);
+        
+        if (ctype_digit($pid_ssl) && posix_kill($pid_ssl, 0)) {
+            printf(
+                "%s listening SSL on '%s:%s', PID is %d\n",
+                basename($argv[0]),
+                $bind_ip,
+                $bind_ssl,
+                $pid_ssl
+            );
+        } else {
+            printf(
+                "Unable to start %s SSL on '%s:%s'\n",
+                basename($argv[0]),
+                $bind_ip,
+                $bind_ssl
+            );
+            die(255);
         }
     }
 
