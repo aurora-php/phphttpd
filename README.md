@@ -5,11 +5,11 @@ Description
 -----------
 
 This project is _not_ about implementing a httpd daemon in PHP. It's just a little
-helper file to make it more easy to write self-contained scripts that should be 
+helper file to make it more easy to write self-contained scripts that should be
 executed by the webserver built right into the PHP executable since PHP 5.4.0.
 
 In fact it's possible to wrap this script in a single executable PHP script that
-is able to start the PHP webserver as a background process and act as routing 
+is able to start the PHP webserver as a background process and act as routing
 script as well.
 
 I myself am using this to build tools that use a webinterface to interact with
@@ -47,7 +47,9 @@ Example
     #!/usr/bin/env php
     <?php
 
-    require_once(__DIR__ . '/phphttpd.inc.php');
+    require_once(__DIR__ . '/libs/Httpd.php');
+
+    (new \Octris\Httpd())->main();
 
     ?>
     <html>
@@ -69,7 +71,7 @@ phphttpd
 Copyright (c) 2012-2013, Harald Lapp <harald.lapp@gmail.com>.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without 
+Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions
 are met:
 
