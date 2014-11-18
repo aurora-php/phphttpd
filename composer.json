@@ -1,0 +1,24 @@
+{
+    "name":         "octris/phphttpd",
+    "type":         "library",
+    "description":  "Library for building self-contained scripts for serving with PHP 5.4's builtin web-server",
+    "keywords":     [],
+    "homepage":     "http://github.com/aurora/phphttpd/",
+    "license":      "BSD-3-Clause",
+
+    "authors":      [{
+        "name":         "Harald Lapp",
+        "email":        "harald@octris.org",
+        "homepage":     "http://www.octris.org/"
+    }],
+
+    "require":      {
+        "php":          ">=5.4.0"
+    },
+
+    "autoload":     {
+        "psr-4":        {
+            "Octris\\Httpd\\": "libs/"
+        }
+    }
+}
