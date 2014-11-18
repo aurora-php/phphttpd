@@ -97,6 +97,157 @@ class Httpd
     }
 
     /**
+     * Show usage information.
+     */
+    protected function showUsage()
+    {
+        global $argv;
+
+        printf("Usage: %s [OPTIONS]\n", $argv[0]);
+        print "  -b, --bind-ip    A single IP that the webserver will be listening on.\n";
+        printf("                   (defaults to %s)\n", $this->bind_ip);
+        print "  -p, --port       A port number the webserver will be listening on.\n";
+        printf("                   (defaults to %d)\n", $this->bind_port);
+        print "  -r, --router     A php script used as request router.\n";
+        print "                   (defaults to the current executed script)\n";
+        print "  --ssl            Enable SSL with the specified port. This requires 'stunnel'\n";
+        print "                   to work.\n";
+        print "  --doc-root       Alternative document-root directory\n";
+        print "  --env            Additional environment variable(s) to set. This option\n";
+        print "                   can be specified multiple times and the option value has\n";
+        print "                   to be in the form 'name=value'.\n";
+        print "  --define         Additional INI entries to set for PHP. Note however, that\n";
+        print "                   'output_buffering' cannot be modified using this option.\n";
+        print "  --pid-file       A file to write the pid to. the file will be overwritten.\n";
+        print "                   (default does not write a PID file)\n";
+    }
+
+    /**
+     * Configure web server using command line arguments.
+     */
+    protected function configure()
+    {
+        global $argv;
+
+        // php version check
+        if (version_compare(PHP_VERSION, self::PHP_VERSION) < 0) {
+            die(sprintf(
+                "Unable to start webserver. Please upgrade to PHP version >= '%s'. Your version is '%s'\n",
+                self::PHP_VERSION,
+                PHP_VERSION
+            ));
+        }
+
+        // process command-line arguments
+        $options = getopt(
+            'b:p:r:h',
+            array('bind-ip:', 'port:', 'router:', 'pid-file:', 'help', 'env:', 'define:', 'doc-root:', 'ssl:')
+        );
+
+        if (isset($options['h']) || isset($options['help'])) {
+            $this->showUsage();
+
+            die(0);
+        }
+
+        if (isset($options['b'])) {
+            $this->bind_ip = $options['b'];
+        } elseif (isset($options['bind-ip'])) {
+            $this->bind_ip = $options['bind-ip'];
+        }
+        if (isset($options['p'])) {
+            $this->bind_port = $options['p'];
+        } elseif (isset($options['port'])) {
+            $this->bind_port = $options['port'];
+        }
+        if (isset($options['ssl'])) {
+            if (`which stunnel` == '') {
+                print "SSL requires 'stunnel' to be installed!\n";
+                die(255);
+            }
+
+            $this->bind_ssl = $options['ssl'];
+        }
+
+        if (isset($options['r'])) {
+            $this->router = $options['r'];
+        } elseif (isset($options['router'])) {
+            $this->router = $options['router'];
+        } elseif (is_null($this->router)) {
+            $trace  = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
+            $tmp    = array_pop($trace);
+
+            $this->router = $tmp['file'];
+        }
+
+        if (!is_file($this->router)) {
+            printf(
+                "Request routing script not found '%s'.\n",
+                $this->router
+            );
+            die(255);
+        }
+
+        if (isset($options['doc-root'])) {
+            $this->docroot = $options['doc-root'];
+
+            if (!is_dir($this->docroot)) {
+                printf(
+                    "Document-root is no directory '%s'.\n",
+                    $this->docroot
+                );
+                die(255);
+            }
+        }
+
+        if (isset($options['pid-file'])) {
+            $this->pid_file = $options['pid-file'];
+        }
+
+        if (!is_null($this->pid_file) && !touch($this->pid_file)) {
+            printf(
+                "Unable to create PID file or PID file is not writable '%s'.\n",
+                $this->pid_file
+            );
+            die(255);
+        }
+
+        if (isset($options['env'])) {
+            $tmp = (is_array($options['env'])
+                    ? $options['env']
+                    : (array)$options['env']);
+
+            foreach ($tmp as $_tmp) {
+                if (!preg_match('/^([a-z_]+[a-z0-9_]*)=(.*)$/i', $_tmp, $match)) {
+                    printf(
+                        "WARNING: skipping invalid environment variable '%s'.\n",
+                        $_tmp
+                    );
+                } else {
+                    $this->env[] = $match[1] . '=' . escapeshellarg($match[2]);
+                }
+            }
+        }
+
+        if (isset($options['define'])) {
+            $tmp = (is_array($options['define'])
+                    ? $options['env']
+                    : (array)$options['define']);
+
+            foreach ($tmp as $_tmp) {
+                if (!preg_match('/^([a-z_]+[a-z0-9_]*)=(.*)$/i', $_tmp, $match)) {
+                    printf(
+                        "WARNING: skipping invalid environment variable '%s'.\n",
+                        $_tmp
+                    );
+                } else {
+                    $this->settings[] = $match[1] . '=' . escapeshellarg($match[2]);
+                }
+            }
+        }
+    }
+
+    /**
      * Main application.
      */
     public function main()
@@ -104,138 +255,7 @@ class Httpd
         global $argv;
 
         if (php_sapi_name() == 'cli') {
-            // php version check
-            if (version_compare(PHP_VERSION, self::PHP_VERSION) < 0) {
-                die(sprintf(
-                    "Unable to start webserver. Please upgrade to PHP version >= '%s'. Your version is '%s'\n",
-                    self::PHP_VERSION,
-                    PHP_VERSION
-                ));
-            }
-
-            // process command-line arguments
-            $options = getopt(
-                'b:p:r:h',
-                array('bind-ip:', 'port:', 'router:', 'pid-file:', 'help', 'env:', 'define:', 'doc-root:', 'ssl:')
-            );
-
-            if (isset($options['h']) || isset($options['help'])) {
-                printf("Usage: %s [OPTIONS]\n", $argv[0]);
-                print "  -b, --bind-ip    A single IP that the webserver will be listening on.\n";
-                printf("                   (defaults to %s)\n", $this->bind_ip);
-                print "  -p, --port       A port number the webserver will be listening on.\n";
-                printf("                   (defaults to %d)\n", $this->bind_port);
-                print "  -r, --router     A php script used as request router.\n";
-                print "                   (defaults to the current executed script)\n";
-                print "  --ssl            Enable SSL with the specified port. This requires 'stunnel'\n";
-                print "                   to work.\n";
-                print "  --doc-root       Alternative document-root directory\n";
-                print "  --env            Additional environment variable(s) to set. This option\n";
-                print "                   can be specified multiple times and the option value has\n";
-                print "                   to be in the form 'name=value'.\n";
-                print "  --define         Additional INI entries to set for PHP. Note however, that\n";
-                print "                   'output_buffering' cannot be modified using this option.\n";
-                print "  --pid-file       A file to write the pid to. the file will be overwritten.\n";
-                print "                   (default does not write a PID file)\n";
-
-                die(0);
-            }
-
-            if (isset($options['b'])) {
-                $this->bind_ip = $options['b'];
-            } elseif (isset($options['bind-ip'])) {
-                $this->bind_ip = $options['bind-ip'];
-            }
-            if (isset($options['p'])) {
-                $this->bind_port = $options['p'];
-            } elseif (isset($options['port'])) {
-                $this->bind_port = $options['port'];
-            }
-            if (isset($options['ssl'])) {
-                if (`which stunnel` == '') {
-                    print "SSL requires 'stunnel' to be installed!\n";
-                    die(255);
-                }
-
-                $this->bind_ssl = $options['ssl'];
-            }
-
-            if (isset($options['r'])) {
-                $this->router = $options['r'];
-            } elseif (isset($options['router'])) {
-                $this->router = $options['router'];
-            } elseif (is_null($this->router)) {
-                $trace  = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
-                $tmp    = array_pop($trace);
-
-                $this->router = $tmp['file'];
-            }
-
-            if (!is_file($this->router)) {
-                printf(
-                    "Request routing script not found '%s'.\n",
-                    $this->router
-                );
-                die(255);
-            }
-
-            if (isset($options['doc-root'])) {
-                $this->docroot = $options['doc-root'];
-
-                if (!is_dir($this->docroot)) {
-                    printf(
-                        "Document-root is no directory '%s'.\n",
-                        $this->docroot
-                    );
-                    die(255);
-                }
-            }
-
-            if (isset($options['pid-file'])) {
-                $this->pid_file = $options['pid-file'];
-            }
-
-            if (!is_null($this->pid_file) && !touch($this->pid_file)) {
-                printf(
-                    "Unable to create PID file or PID file is not writable '%s'.\n",
-                    $this->pid_file
-                );
-                die(255);
-            }
-
-            if (isset($options['env'])) {
-                $tmp = (is_array($options['env'])
-                        ? $options['env']
-                        : (array)$options['env']);
-
-                foreach ($tmp as $_tmp) {
-                    if (!preg_match('/^([a-z_]+[a-z0-9_]*)=(.*)$/i', $_tmp, $match)) {
-                        printf(
-                            "WARNING: skipping invalid environment variable '%s'.\n",
-                            $_tmp
-                        );
-                    } else {
-                        $this->env[] = $match[1] . '=' . escapeshellarg($match[2]);
-                    }
-                }
-            }
-
-            if (isset($options['define'])) {
-                $tmp = (is_array($options['define'])
-                        ? $options['env']
-                        : (array)$options['define']);
-
-                foreach ($tmp as $_tmp) {
-                    if (!preg_match('/^([a-z_]+[a-z0-9_]*)=(.*)$/i', $_tmp, $match)) {
-                        printf(
-                            "WARNING: skipping invalid environment variable '%s'.\n",
-                            $_tmp
-                        );
-                    } else {
-                        $this->env[] = $match[1] . '=' . escapeshellarg($match[2]);
-                    }
-                }
-            }
+            $this->configure();
 
             // start stunnel
             if (!is_null($this->bind_ssl)) {
