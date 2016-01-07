@@ -1,6 +1,8 @@
 phphttpd
 ========
 
+**Further (incompatible) development will take place at this fork: https://github.com/octris/phphttpd**
+
 Description
 -----------
 
